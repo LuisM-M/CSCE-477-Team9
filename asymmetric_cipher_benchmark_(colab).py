@@ -143,6 +143,23 @@ print("\n--- Benchmark Complete ---")
 # --- Display Results in a Clean Table ---
 df = pd.DataFrame(results)
 df = df.round(6) # Round to 6 decimal places for these fast operations
+
+
+# --- SAVE TO FILE (CSV) ---
+results_folder = "results"
+output_filename_csv = "asymmetric_benchmark_results.csv"
+
+# 1. Create the 'results' folder if it doesn't already exist
+os.makedirs(results_folder, exist_ok=True)
+
+# 2. Create the full path (e.g., "results/asymmetric_benchmark_results.csv")
+full_output_path = os.path.join(results_folder, output_filename_csv)
+
+# 3. Save the file to that specific path
+df.to_csv(full_output_path, index=False)
+print(f"\n✅ Results successfully saved to: {full_output_path}")
+# ---------------------------
+
 print(df.to_markdown(index=False))
 
 print("\n--- Key Takeaways ---")

@@ -1,0 +1,5 @@
+Algorithm,Key Size,Security Equiv. (approx),Avg. Key Gen (s),Avg. Sign (s),Avg. Verify (s)
+RSA,2048-bit,~112-bit,0.083658,0.001223,4e-05
+RSA,3072-bit,~128-bit,0.146385,0.003077,6.8e-05
+ECC,P-256,~128-bit,0.000159,3.2e-05,6.9e-05
+ECC,P-384,~192-bit,0.000739,0.000792,0.001874

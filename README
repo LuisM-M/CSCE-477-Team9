@@ -1,0 +1,9 @@
+if running locally do:
+
+pip install tabulate
+pip install pandas
+pip install cryptography pandas
+
+if running on google collab do:
+
+pip install cryptography pandas
