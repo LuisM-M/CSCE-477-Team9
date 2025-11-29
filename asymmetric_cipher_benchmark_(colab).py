@@ -76,7 +76,8 @@ def benchmark_rsa(key_size_bits):
         "Security Equiv. (approx)": f"~{112 if key_size_bits == 2048 else 128}-bit",
         "Avg. Key Gen (s)": key_gen_time,
         "Avg. Sign (s)": avg_sign_time,
-        "Avg. Verify (s)": avg_verify_time
+        "Avg. Verify (s)": avg_verify_time,
+        "Total Time (s)": key_gen_time + avg_sign_time + avg_verify_time
     }
 
 def benchmark_ecc(curve, curve_name, security_equiv):
@@ -120,7 +121,8 @@ def benchmark_ecc(curve, curve_name, security_equiv):
         "Security Equiv. (approx)": f"~{security_equiv}-bit",
         "Avg. Key Gen (s)": key_gen_time,
         "Avg. Sign (s)": avg_sign_time,
-        "Avg. Verify (s)": avg_verify_time
+        "Avg. Verify (s)": avg_verify_time,
+        "Total Time (s)": key_gen_time + avg_sign_time + avg_verify_time
     }
 
 # --- Run Benchmarks ---

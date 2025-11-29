@@ -1,9 +1,18 @@
-if running locally do:
+**if running locally do:**
 
-pip install tabulate
-pip install pandas
-pip install cryptography pandas
+`pip install tabulate`
+`pip install pandas`
+`pip install cryptography pandas`
 
-if running on google collab do:
+**if running on google collab do:**
 
-pip install cryptography pandas
+`pip install cryptography pandas`
+
+**To start database**
+
+`npm install express`
+`npm server.js`
+
+And then in a new terminal
+
+`npm client.js`
