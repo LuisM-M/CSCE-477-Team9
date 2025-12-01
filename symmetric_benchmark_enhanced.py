@@ -1,98 +1,198 @@
 import os
 import time
 import pandas as pd
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
+import time
+import tracemalloc # Import for memory tracking
+# pandas, os, and other libraries were imported in the cell above
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
+from cryptography.hazmat.backends import default_backend
 
 # --- Configuration ---
-DATA_SIZES_TO_TEST = {
-    "1KB": 1024,
-    "1MB": 1024 * 1024,
-    "100MB": 100 * 1024 * 1024
-}
-NUM_ITERATIONS_LARGE = 5
-NUM_ITERATIONS_SMALL = 100
+NUM_ITERATIONS_ASYMMETRIC = 100 
+print(f"Starting asymmetric benchmark (V3)...")
+print(f"Iterations per test: {NUM_ITERATIONS_ASYMMETRIC}\n")
 
-print(f"Starting symmetric benchmark (Enhanced)...")
-
-# --- Setup Paths ---
-RESULTS_FOLDER = os.path.join(os.getcwd(), "results")
+# --- Setup Paths (already done, but good to have for this cell) ---
+SCRIPT_DIRECTORY = os.getcwd()
+RESULTS_FOLDER = os.path.join(SCRIPT_DIRECTORY, "results")
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
+print(f"Saving results to: {RESULTS_FOLDER}")
 
 # --- Generate Test Data ---
-print("Generating test data...")
-test_data = {}
-for name, size in DATA_SIZES_TO_TEST.items():
-    test_data[name] = os.urandom(size)
-print("Test data generated.\n")
+data_hash = os.urandom(32) # 32-byte hash (simulates SHA-256)
+print("Test data (32-byte hash) generated.\n")
 
-symmetric_results = []
+# This list will store our results
+asymmetric_results = []
 
-def get_iterations(size_bytes):
-    return NUM_ITERATIONS_SMALL if size_bytes < (1024 * 1024) else NUM_ITERATIONS_LARGE
-
-def benchmark_aes_gcm(data, data_name, key_size_bits):
-    size_bytes = len(data)
-    num_iterations = get_iterations(size_bytes)
-    print(f"Testing: AES-{key_size_bits} GCM ({data_name})")
-
-    key = AESGCM.generate_key(bit_length=key_size_bits)
-    aes_gcm = AESGCM(key)
-    nonce = os.urandom(12) 
+def benchmark_rsa(key_size_bits):
+    """
+    Benchmarks RSA for key generation, signing, and verification.
+    Also measures peak memory usage for each.
     
-    # Encrypt
+    Returns a dictionary of results.
+    """
+    print(f"Testing: RSA {key_size_bits}-bit")
+    
+    # --- 1. Key Generation ---
+    tracemalloc.start()
     start_time = time.perf_counter()
-    for _ in range(num_iterations):
-        ciphertext = aes_gcm.encrypt(nonce, data, None)
-    end_time = time.perf_counter()
-    encrypt_throughput = ((size_bytes * num_iterations) / (1024*1024)) / (end_time - start_time)
     
-    # Decrypt
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=key_size_bits,
+        backend=default_backend()
+    )
+    
+    key_gen_time = time.perf_counter() - start_time
+    _, key_gen_peak_mem = tracemalloc.get_traced_memory() # current, peak
+    tracemalloc.stop()
+    
+    public_key = private_key.public_key()
+    
+    # --- 2. Sign Test ---
+    tracemalloc.start()
     start_time = time.perf_counter()
-    for _ in range(num_iterations):
-        aes_gcm.decrypt(nonce, ciphertext, None)
-    end_time = time.perf_counter()
-    decrypt_throughput = ((size_bytes * num_iterations) / (1024*1024)) / (end_time - start_time)
     
-    symmetric_results.append({
-        "Algorithm": "AES", "Key Size": key_size_bits, "Mode": "GCM",
-        "Data Size": data_name, "Encrypt (MB/s)": encrypt_throughput
-    })
-
-def benchmark_chacha20(data, data_name):
-    size_bytes = len(data)
-    num_iterations = get_iterations(size_bytes)
-    print(f"Testing: ChaCha20-Poly1305 ({data_name})")
+    for _ in range(NUM_ITERATIONS_ASYMMETRIC):
+        signature = private_key.sign(
+            data_hash,
+            padding.PSS( 
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        
+    avg_sign_time = (time.perf_counter() - start_time) / NUM_ITERATIONS_ASYMMETRIC
+    _, sign_peak_mem = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
     
-    key = ChaCha20Poly1305.generate_key()
-    chacha = ChaCha20Poly1305(key)
-    nonce = os.urandom(12)
-    
-    # Encrypt
+    # --- 3. Verify Test ---
+    tracemalloc.start()
     start_time = time.perf_counter()
-    for _ in range(num_iterations):
-        ciphertext = chacha.encrypt(nonce, data, None)
-    end_time = time.perf_counter()
-    encrypt_throughput = ((size_bytes * num_iterations) / (1024*1024)) / (end_time - start_time)
     
-    # Decrypt
+    for _ in range(NUM_ITERATIONS_ASYMMETRIC):
+        public_key.verify(
+            signature,
+            data_hash,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        
+    avg_verify_time = (time.perf_counter() - start_time) / NUM_ITERATIONS_ASYMMETRIC
+    _, verify_peak_mem = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    
+    # --- 4. Return results as a dictionary ---
+    return {
+        "Algorithm": "RSA",
+        "Key": f"{key_size_bits}-bit",
+        "Security (approx)": f"~{112 if key_size_bits == 2048 else 128}-bit",
+        "Key Gen (s)": key_gen_time,
+        "Sign (s)": avg_sign_time,
+        "Verify (s)": avg_verify_time,
+        "Key Gen Peak (KiB)": key_gen_peak_mem / 1024,
+        "Sign Peak (KiB)": sign_peak_mem / 1024,
+        "Verify Peak (KiB)": verify_peak_mem / 1024
+    }
+
+def benchmark_ecc(curve, curve_name, security_equiv):
+    """
+    Benchmarks ECC for key generation, signing, and verification.
+    Also measures peak memory usage for each.
+    
+    Returns a dictionary of results.
+    """
+    print(f"Testing: ECC {curve_name}")
+    
+    # --- 1. Key Generation ---
+    tracemalloc.start()
     start_time = time.perf_counter()
-    for _ in range(num_iterations):
-        chacha.decrypt(nonce, ciphertext, None)
-    end_time = time.perf_counter()
-    decrypt_throughput = ((size_bytes * num_iterations) / (1024*1024)) / (end_time - start_time)
     
-    symmetric_results.append({
-        "Algorithm": "ChaCha20", "Key Size": 256, "Mode": "Poly1305",
-        "Data Size": data_name, "Encrypt (MB/s)": encrypt_throughput
-    })
+    private_key = ec.generate_private_key(
+        curve, backend=default_backend()
+    )
+    
+    key_gen_time = time.perf_counter() - start_time
+    _, key_gen_peak_mem = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    
+    public_key = private_key.public_key()
+    
+    # --- 2. Sign Test ---
+    tracemalloc.start()
+    start_time = time.perf_counter()
+    
+    for _ in range(NUM_ITERATIONS_ASYMMETRIC):
+        signature = private_key.sign(
+            data_hash,
+            ec.ECDSA(hashes.SHA256())
+        )
+        
+    avg_sign_time = (time.perf_counter() - start_time) / NUM_ITERATIONS_ASYMMETRIC
+    _, sign_peak_mem = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    
+    # --- 3. Verify Test ---
+    tracemalloc.start()
+    start_time = time.perf_counter()
+    
+    for _ in range(NUM_ITERATIONS_ASYMMETRIC):
+        public_key.verify(
+            signature,
+            data_hash,
+            ec.ECDSA(hashes.SHA256())
+        )
+        
+    avg_verify_time = (time.perf_counter() - start_time) / NUM_ITERATIONS_ASYMMETRIC
+    _, verify_peak_mem = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
 
-# --- Run ---
-for name, data in test_data.items():
-    benchmark_aes_gcm(data, name, 128)
-    benchmark_aes_gcm(data, name, 256)
-    benchmark_chacha20(data, name)
+    # --- 4. Return results as a dictionary ---
+    return {
+        "Algorithm": "ECC",
+        "Key": curve_name,
+        "Security (approx)": f"~{security_equiv}-bit",
+        "Key Gen (s)": key_gen_time,
+        "Sign (s)": avg_sign_time,
+        "Verify (s)": avg_verify_time,
+        "Key Gen Peak (KiB)": key_gen_peak_mem / 1024,
+        "Sign Peak (KiB)": sign_peak_mem / 1024,
+        "Verify Peak (KiB)": verify_peak_mem / 1024
+    }
 
-# --- Save ---
-df = pd.DataFrame(symmetric_results)
-df.to_csv(os.path.join(RESULTS_FOLDER, "symmetric_benchmark_results.csv"), index=False)
-print("\n✅ Enhanced Symmetric results saved.")
+# --- Run Benchmarks ---
+print("Running asymmetric benchmarks, this may take a moment...\n")
+
+# --- RSA Tests ---
+asymmetric_results.append(benchmark_rsa(2048))
+asymmetric_results.append(benchmark_rsa(3072))
+
+# --- ECC Tests ---
+asymmetric_results.append(benchmark_ecc(ec.SECP256R1(), "P-256 (secp256r1)", 128))
+asymmetric_results.append(benchmark_ecc(ec.SECP384R1(), "P-384 (secp384r1)", 192))
+
+print("\n--- Asymmetric Benchmark Complete ---")
+
+# --- Display Results in a Clean Table ---
+df_asymmetric = pd.DataFrame(asymmetric_results)
+df_asymmetric = df_asymmetric.round(6) 
+
+# --- SAVE TO FILE (CSV) ---
+output_filename_csv = "asymmetric_benchmark_results.csv"
+full_output_path = os.path.join(RESULTS_FOLDER, output_filename_csv)
+df_asymmetric.to_csv(full_output_path, index=False)
+print(f"\n✅ Asymmetric results successfully saved to: {full_output_path}")
+# ---------------------------
+
+print("\n--- Asymmetric Benchmark Results (V3) ---")
+try:
+    print(df_asymmetric.to_markdown(index=False))
+except ImportError:
+    print(df_asymmetric)
