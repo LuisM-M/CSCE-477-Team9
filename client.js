@@ -157,6 +157,75 @@ function decryptRSA(encryptedData, privateKey) {
   return fullBuffer.toString('utf8');
 }
 
+// ECC/ECDH Encryption
+const ECC_CURVE = 'prime256v1';
+
+function encryptECDH(text, recipientPublicKey) {
+  // 1. Sender generates an Ephemeral Key Pair
+  const ephemeralKey = crypto.createECDH(ECC_CURVE);
+  ephemeralKey.generateKeys();
+  const ephemeralPublicKey = ephemeralKey.getPublicKey('hex', 'compressed');
+
+  // 2. Sender computes the Shared Secret using the recipient's public key
+  const sharedSecret = ephemeralKey.computeSecret(
+    recipientPublicKey,
+    'hex',
+    'hex'
+  );
+
+  // 3. Hash the shared secret to create a 32-byte key for AES-256-GCM
+  const aesKey = crypto.createHash('sha256').update(sharedSecret).digest();
+
+  // 4. Encrypt the data symmetrically using the derived key (AES-256-GCM)
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv);
+
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+
+  const authTag = cipher.getAuthTag();
+
+  return {
+    encrypted,
+    iv: iv.toString('hex'),
+    authTag: authTag.toString('hex'),
+    // MUST include the Ephemeral Public Key
+    ephemeralPublicKey: ephemeralPublicKey,
+  };
+}
+
+// ECC/ECDH Decryption
+function decryptECDH(encryptedData, recipientPrivateKey) {
+  // 1. Recipient creates their ECDH object using their private key
+  const ecdh = crypto.createECDH(ECC_CURVE);
+  // FIX: Using 'hex' encoding to set the raw private key, resolving the 'Unknown encoding: pem' error.
+  ecdh.setPrivateKey(recipientPrivateKey, 'hex'); 
+
+  // 2. Recipient computes the Shared Secret using the sender's ephemeral public key
+  const sharedSecret = ecdh.computeSecret(
+    encryptedData.ephemeralPublicKey, 
+    'hex', 
+    'hex'
+  );
+
+  // 3. Hash the shared secret to derive the same 32-byte key for AES-256-GCM
+  const aesKey = crypto.createHash('sha256').update(sharedSecret).digest();
+
+  // 4. Decrypt the data symmetrically using the derived key (AES-256-GCM)
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    aesKey,
+    Buffer.from(encryptedData.iv, 'hex')
+  );
+
+  decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
+
+  let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+
+  return decrypted;
+}
+
 // Benchmark function
 async function benchmark(label, encryptFn, decryptFn, key, text, iterations = 100) {
   console.log(`\n${label}:`);
@@ -231,6 +300,14 @@ async function run() {
         format: 'pem'
       }
     });
+
+    // ECC key pair (prime256v1 curve) for ECDH Encryption
+    const ecdhInstance = crypto.createECDH(ECC_CURVE);
+    ecdhInstance.generateKeys();
+
+    const eccPublicKey = ecdhInstance.getPublicKey('hex', 'compressed'); // Hex string for public key exchange
+    // FIX: Get the private key in HEX format instead of PEM.
+    const eccPrivateKey = ecdhInstance.getPrivateKey('hex'); 
     
     const testString = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce faucibus ornare lorem at volutpat. Sed vulputate augue eu neque elementum tincidunt. Aliquam sed massa libero. Curabitur eleifend vehicula mauris, ut viverra justo ultricies non. Integer ornare et enim id suscipit. Vivamus accumsan sollicitudin nisi lacinia eleifend. Nam varius justo erat, quis mollis turpis pulvinar in. Pellentesque imperdiet, nisl et imperdiet eleifend, ante elit viverra sapien, ac laoreet massa justo et nisl. Nullam malesuada gravida dolor, quis imperdiet est fermentum ullamcorper. Integer turpis enim, volutpat ut luctus id, ullamcorper ac felis. Praesent urna dolor, consequat eu bibendum at, eleifend sed elit. Suspendisse nibh sapien, dignissim et ligula sit amet, scelerisque efficitur sapien. Fusce vel imperdiet lacus. Aenean ultricies nunc odio, a tempor arcu pharetra at. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae;Vivamus ornare sagittis mattis. Aenean at nulla purus. In nisi sem, egestas a mauris quis, tempus posuere lectus. Proin a metus condimentum, commodo nisi a, maximus quam. Duis sed venenatis urna, id placerat nibh. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Aenean fringilla fermentum pulvinar. Praesent nisl urna, ultricies et ornare quis, varius non purus. Cras fermentum pulvinar eleifend. Vivamus vel est ante. Fusce malesuada iaculis libero vitae vulputate. Integer laoreet ut nisi quis tempor. Aenean nunc massa, porta at venenatis sed, cursus id ante. In vestibulum velit non elit dictum, eget pharetra lectus laoreet. Phasellus sed vulputate massa.Quisque hendrerit congue justo quis porttitor. Sed eget augue aliquam, imperdiet mauris non, ultricies sapien. Donec eget leo vel est aliquam elementum. Integer id suscipit lorem. In libero urna, porta eget massa eu, porta tincidunt felis. Vestibulum ut facilisis urna. Quisque pretium molestie imperdiet. Vivamus auctor, ante at tristique blandit, nulla dui convallis risus, suscipit scelerisque dolor quam vel elit. Integer lobortis tortor nisi, at facilisis risus suscipit at. Donec ut nisl ut ante ultricies tincidunt et sit amet tortor. Aenean quis pulvinar lacus. Mauris ut consequat nulla. Quisque id tortor quis purus fringilla dignissim. Integer eget ex vitae mauris vehicula vestibulum. Nullam et lectus eros.Ut ut erat fermentum, pellentesque nisl a, fringilla nulla. Quisque rutrum, turpis sed ullamcorper ultrices, erat felis convallis libero, at consequat neque metus eu velit. Maecenas interdum, libero pulvinar porta vehicula, dui mauris lobortis risus, laoreet commodo ex ante a leo. Quisque vitae auctor mauris. Praesent non neque fringilla, vehicula odio ac, consequat velit. Nam euismod libero vel odio luctus pretium. Nullam porttitor, arcu a finibus aliquam, est lectus maximus erat, ac pellentesque felis erat eget enim. Phasellus sed dui sit amet magna aliquet pulvinar. Aliquam eu sem eu erat gravida interdum. Cras sem nibh, molestie non pulvinar sed, mollis vitae tortor. Ut eu lorem vitae diam efficitur sagittis. Ut euismod orci leo, vel eleifend urna ornare sit amet. Fusce non pharetra odio. Nam aliquet, lacus eget gravida volutpat, ligula nibh scelerisque dui, ut blandit arcu tellus ac risus.Aliquam at placerat massa. Maecenas libero dui, bibendum sed augue sit amet, iaculis varius dui. Etiam auctor elementum faucibus. Ut dui eros, tempor ut urna ac, hendrerit rhoncus metus. Curabitur nec erat interdum, venenatis lacus pellentesque, pellentesque purus. In blandit vulputate metus, sed accumsan leo auctor vel. Curabitur non tellus condimentum, pharetra orci et, maximus diam. Suspendisse potenti. Morbi a vehicula sem.Quisque ut mattis ante, eget rhoncus felis. Mauris nec nisl at sapien consectetur efficitur. Quisque at tempus erat. Fusce tristique vestibulum libero, rhoncus sodales ex luctus at. Vivamus nec porta eros, vel molestie ante. Cras vehicula eget tortor eget maximus. Phasellus in facilisis metus, vitae lacinia dolor. Praesent arcu lacus, varius vitae eros a, venenatis molestie metus. Nullam vel sapien ac ipsum congue semper id sed massa. Aenean eu tincidunt ligula, nec tempor risus. Morbi vel pellentesque neque. Sed sit amet nisi imperdiet ligula fringilla dapibus. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Aenean non volutpat libero. Quisque accumsan sodales libero et tincidunt.Maecenas vel ipsum gravida, dapibus elit hendrerit, facilisis quam. Aliquam dapibus porta felis a suscipit. Quisque volutpat quis justo interdum semper. Nulla et mollis ante. Fusce nec fringilla lacus, a vestibulum leo. Nam id quam eleifend, vehicula orci sed, volutpat dui. Vivamus porta nisi quam, at aliquam est faucibus sit amet. Aliquam augue lacus, consectetur at commodo sed, venenatis eget nisl. Suspendisse porttitor augue quis eleifend egestas. Ut rutrum diam felis, eget lobortis urna bibendum vel. Nam orci ex, commodo nec elementum a, ornare ut lectus. Donec et aliquam elit, quis varius nulla. Duis ut ullamcorper metus. Aenean nec mi quis lacus dictum mattis eget vel enim. Curabitur turpis risus, tempus et maximus a, condimentum nec metus.Etiam massa ligula, blandit et consequat ac, euismod sit amet tellus. Proin ut fringilla libero. Nunc quis justo id ex cursus ultricies. Proin finibus id quam ac sodales. Donec augue enim, finibus non feugiat a, vehicula convallis odio. Duis sollicitudin porta ornare. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Nunc venenatis arcu et lorem tempor pharetra. Nulla interdum quam eget est aliquet sollicitudin. Vestibulum ac tellus quis nisi maximus feugiat. Vestibulum semper mollis dolor. Pellentesque a tellus in nulla egestas iaculis. Phasellus at mauris quis neque porttitor interdum.In tincidunt mi sagittis blandit luctus. Nam tempus, nunc at commodo faucibus, risus tortor vehicula quam, vitae blandit erat mi at est. Integer in lacinia justo, id sodales nisi. Mauris vulputate laoreet consequat. Suspendisse ullamcorper a augue ac ornare. Donec eu tincidunt nibh. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Donec eu nunc vel nibh blandit tristique. Suspendisse a mollis massa. Nunc vel scelerisque nulla, ac bibendum orci. Aenean molestie, velit at congue mattis, neque nibh sodales est, eu vestibulum neque nunc eget sem. Aliquam auctor ligula lorem, non malesuada dolor laoreet et. Donec id ex vitae dolor bibendum placerat. Phasellus non quam aliquet, consequat metus vitae, blandit nunc. Integer vitae metus dapibus, viverra elit vitae, volutpat purus. Maecenas consectetur dui eget nibh ultricies cursus.Sed vel dui sit amet tortor lacinia dapibus. Sed ut blandit quam. Praesent molestie sagittis lacinia. Phasellus eget dolor eget ipsum elementum suscipit. Nunc bibendum ante ac odio lobortis, non scelerisque diam pretium. Vivamus id risus leo. Sed non nisl euismod, tempus dolor quis, aliquet orci. Fusce ut purus consequat, malesuada risus vitae, ullamcorper magna.Sed a aliquet urna. Phasellus varius, purus vitae ultrices ullamcorper, mi odio tristique elit, et tempor tortor orci vel purus. Suspendisse tristique, erat ac eleifend ultrices, orci tellus imperdiet felis, et iaculis magna odio faucibus nunc. Quisque posuere rhoncus mauris. In hac habitasse platea dictumst. Interdum et malesuada fames ac ante ipsum primis in faucibus. Quisque vestibulum finibus velit ornare tristique. Phasellus vel placerat diam. Vestibulum tempor justo nec est ornare faucibus nec id magna. Nunc eleifend, nisl ac finibus volutpat, nisi metus pulvinar neque, quis feugiat urna odio ut diam. Sed sed sem ullamcorper, porttitor risus eu, scelerisque nisi. Integer semper enim ut cursus ornare. Suspendisse hendrerit turpis at augue mollis, nec sodales augue auctor. Sed porttitor nisl eu mauris fermentum convallis. Donec felis dui, condimentum eget faucibus ac, volutpat vel metus. Praesent mattis dolor lectus, nec aliquet ex finibus vel.Etiam nec porta felis. In nec felis bibendum, accumsan mauris in, iaculis nulla. Suspendisse sagittis condimentum erat eu ornare. Nullam ullamcorper leo velit, ac faucibus arcu mollis eget. Maecenas porta euismod ante et condimentum. Curabitur mollis felis non massa dignissim, fringilla commodo sem vestibulum. Quisque ornare ut tortor laoreet rutrum.Nam vitae ipsum eget libero mollis sagittis. Mauris tempus placerat nunc, a scelerisque sapien ullamcorper vestibulum. Etiam vehicula orci massa, sit amet congue tellus euismod iaculis. Integer viverra nibh vel bibendum aliquam. Nullam fringilla felis neque, a consectetur turpis commodo vitae. Suspendisse potenti. Curabitur sit amet risus ut turpis interdum pretium. Morbi efficitur, dolor at mollis lacinia, sapien massa pharetra purus, dictum vestibulum quam velit non lectus. Aliquam efficitur mi a feugiat egestas. Nulla facilisi. Maecenas commodo enim quis velit placerat pulvinar. Maecenas ac tortor at mauris tincidunt gravida. Nunc gravida velit vel eros malesuada fringilla. Pellentesque tincidunt semper porttitor. Praesent blandit ipsum nunc, quis aliquam dolor feugiat vitae.Curabitur vel massa a sem tempus molestie. Maecenas ut ligula metus. Quisque sodales aliquam elit non efficitur. Donec et nibh ultricies, placerat lorem quis, elementum ante. Sed laoreet viverra erat, sed vulputate libero fermentum ut. Ut eget aliquet lorem. Vestibulum pharetra dolor lacinia, semper enim vel, malesuada eros.Vestibulum accumsan risus lectus, non varius tellus efficitur in. Etiam volutpat consectetur diam, dictum blandit purus blandit at. Sed luctus, ex id pellentesque laoreet, ante lacus molestie diam, id mattis enim risus eget lacus. Sed suscipit interdum sapien sit amet sollicitudin. Praesent elementum urna odio, vel pharetra tortor suscipit a. Etiam pulvinar nec risus nec placerat. Nam vitae nulla in risus pretium rhoncus a vel justo. Integer feugiat porttitor lacinia. Suspendisse laoreet sit amet quam nec rutrum. Proin sodales varius aliquam. Suspendisse nec tristique neque.Aliquam elementum non orci venenatis laoreet. Quisque efficitur ac est ut commodo. Aliquam sed turpis aliquam nisi mollis dapibus laoreet nec odio nec. ';
     
@@ -273,6 +350,19 @@ async function run() {
       null,
       testString
     );
+
+    // 5. ECC ECDH (Asymmetric Encryption - ECIES-like)
+    // The public key (hex) is used for encryption. The private key (hex) is used for decryption.
+    const ecdhEncryptWrapper = (text, key) => encryptECDH(text, eccPublicKey);
+    const ecdhDecryptWrapper = (encryptedData, key) => decryptECDH(encryptedData, eccPrivateKey);
+
+    const ecdh = await benchmark(
+      '5. ECC ECDH (encrypt + store + retrieve + decrypt)',
+      ecdhEncryptWrapper,
+      ecdhDecryptWrapper,
+      null, 
+      testString
+    );
     
     // Summary
     console.log('\n' + '='.repeat(50));
@@ -282,11 +372,13 @@ async function run() {
     console.log(`AES-256-GCM:       ${aes.median.toFixed(3)} ms (+${(aes.median - unencrypted.median).toFixed(3)} ms)`);
     console.log(`ChaCha20-Poly1305: ${chacha.median.toFixed(3)} ms (+${(chacha.median - unencrypted.median).toFixed(3)} ms)`);
     console.log(`RSA-2048-OAEP:     ${rsa.median.toFixed(3)} ms (+${(rsa.median - unencrypted.median).toFixed(3)} ms)`);
-    
+    console.log(`ECC-256 (ECIES):   ${ecdh.median.toFixed(3)} ms (+${(ecdh.median - unencrypted.median).toFixed(3)} ms)`);
+
     console.log('\nEncryption Overhead:');
     console.log(`AES-256-GCM:       ${((aes.median / unencrypted.median - 1) * 100).toFixed(2)}% slower`);
     console.log(`ChaCha20-Poly1305: ${((chacha.median / unencrypted.median - 1) * 100).toFixed(2)}% slower`);
     console.log(`RSA-2048-OAEP:     ${((rsa.median / unencrypted.median - 1) * 100).toFixed(2)}% slower`);
+    console.log(`ECC-256 (ECIES):   ${((ecdh.median / unencrypted.median - 1) * 100).toFixed(2)}% slower`);
     
     const faster = aes.median < chacha.median ? 'AES-256-GCM' : 'ChaCha20-Poly1305';
     const diff = Math.abs(aes.median - chacha.median);
