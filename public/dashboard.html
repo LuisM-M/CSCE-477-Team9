@@ -1,33 +1,126 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Crypto Benchmark Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group 9: Crypto Benchmark Dashboard</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h1 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .chart-box { margin: 30px 0; text-align: center; }
-        img { max-width: 100%; height: auto; border: 1px solid #ddd; }
-        .refresh-btn { display: block; margin: 20px auto; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; width: fit-content; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            padding: 40px; 
+            background: #f8fafc; 
+            color: #334155;
+        }
+        .container { 
+            max-width: 1100px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+        }
+        header { 
+            border-bottom: 2px solid #e2e8f0; 
+            padding-bottom: 20px; 
+            margin-bottom: 40px; 
+            text-align: center;
+        }
+        h1 { margin: 0; color: #0f172a; }
+        p.subtitle { color: #64748b; margin-top: 10px; }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 40px;
+        }
+        
+        .chart-box { 
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .chart-box:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        h2 { font-size: 1.25rem; color: #2563eb; margin-bottom: 0.5rem; }
+        p.desc { font-size: 0.9rem; color: #64748b; margin-bottom: 1.5rem; }
+        
+        img { 
+            max-width: 100%; 
+            height: auto; 
+            border-radius: 4px;
+        }
+        
+        .refresh-btn { 
+            display: inline-block; 
+            margin-top: 10px; 
+            padding: 10px 20px; 
+            background: #2563eb; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            font-weight: 600;
+        }
+        .refresh-btn:hover { background: #1d4ed8; }
+        
+        .error-msg {
+            color: #dc2626;
+            font-size: 0.8rem;
+            background: #fef2f2;
+            padding: 10px;
+            border-radius: 4px;
+            display: none; /* Hidden by default */
+        }
+        img:onerror { display: none; } /* Hide broken image icon */
+        img:onerror + .error-msg { display: block; } /* Show error msg if image fails */
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Cryptographic Performance Dashboard</h1>
-        <p>Results generated from Python benchmarks on Apple M3 Max.</p>
-        
-        <a href="/dashboard.html" class="refresh-btn">Refresh Dashboard</a>
+        <header>
+            <h1>Cryptographic Performance Dashboard</h1>
+            <p class="subtitle">Benchmarks generated via Python `cryptography` library on local hardware.</p>
+            <a href="javascript:location.reload()" class="refresh-btn">Refresh Dashboard</a>
+        </header>
 
-        <div class="chart-box">
-            <h2>Symmetric Encryption Throughput</h2>
-            <p>Comparing AES-GCM vs ChaCha20 across different data sizes.</p>
-            <img src="/results/chart_symmetric.png" alt="Run the python script to generate this chart">
-        </div>
+        <div class="grid">
+            <!-- 1. Symmetric Throughput -->
+            <div class="chart-box">
+                <h2>1. Symmetric Encryption Speed</h2>
+                <p class="desc">Comparing throughput (MB/s) of AES-GCM vs. ChaCha20.</p>
+                <img src="results/symmetric_encrypt_throughput.png" alt="Symmetric Throughput Graph">
+                <div class="error-msg">⚠️ Graph not found. Run <code>visualize_results.py</code> first.</div>
+            </div>
 
-        <div class="chart-box">
-            <h2>Asymmetric Key Generation Speed</h2>
-            <p>Comparing RSA vs ECC key generation time.</p>
-            <img src="/results/chart_asymmetric_keygen.png" alt="Run the python script to generate this chart">
+            <!-- 2. Asymmetric Key Gen Time -->
+            <div class="chart-box">
+                <h2>2. Key Generation Speed</h2>
+                <p class="desc">Time taken to generate RSA vs. ECC keys (Lower is better).</p>
+                <img src="results/asymmetric_key_gen_time.png" alt="Key Gen Time Graph">
+                <div class="error-msg">⚠️ Graph not found. Run <code>visualize_results.py</code> first.</div>
+            </div>
+
+            <!-- 3. Asymmetric Sign/Verify -->
+            <div class="chart-box">
+                <h2>3. Sign & Verify Latency</h2>
+                <p class="desc">Performance of digital signature operations.</p>
+                <img src="results/asymmetric_sign_verify_time.png" alt="Sign Verify Graph">
+                <div class="error-msg">⚠️ Graph not found. Run <code>visualize_results.py</code> first.</div>
+            </div>
+
+            <!-- 4. Asymmetric Memory -->
+            <div class="chart-box">
+                <h2>4. Peak Memory Usage</h2>
+                <p class="desc">RAM consumed during key generation (Crucial for IoT).</p>
+                <img src="results/asymmetric_key_gen_memory.png" alt="Memory Usage Graph">
+                <div class="error-msg">⚠️ Graph not found. Run <code>visualize_results.py</code> first.</div>
+            </div>
         </div>
     </div>
 </body>
