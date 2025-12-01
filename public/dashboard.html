@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crypto Benchmark Dashboard</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .chart-box { margin: 30px 0; text-align: center; }
+        img { max-width: 100%; height: auto; border: 1px solid #ddd; }
+        .refresh-btn { display: block; margin: 20px auto; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; width: fit-content; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cryptographic Performance Dashboard</h1>
+        <p>Results generated from Python benchmarks on Apple M3 Max.</p>
+        
+        <a href="/dashboard.html" class="refresh-btn">Refresh Dashboard</a>
+
+        <div class="chart-box">
+            <h2>Symmetric Encryption Throughput</h2>
+            <p>Comparing AES-GCM vs ChaCha20 across different data sizes.</p>
+            <img src="/results/chart_symmetric.png" alt="Run the python script to generate this chart">
+        </div>
+
+        <div class="chart-box">
+            <h2>Asymmetric Key Generation Speed</h2>
+            <p>Comparing RSA vs ECC key generation time.</p>
+            <img src="/results/chart_asymmetric_keygen.png" alt="Run the python script to generate this chart">
+        </div>
+    </div>
+</body>
+</html>
